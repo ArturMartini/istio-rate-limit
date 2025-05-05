@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: global-ratelimit-configmap
+  namespace: istio-system
+data:
+  config.yaml: |
+    domain: echo-ratelimit
+    descriptors:
+      - key: PATH
+        value: /xpto
+        descriptors:
+          - key: METHOD
+            value: POST
+            descriptors:
+              - key: header_match
+                value: x-client-id
+                descriptors:
+                - key: x-client-id
+                  rate_limit:
+                    unit: minute
+                    requests_per_unit: 5
+      - key: PATH
+        value: /xpto
+        descriptors:
+          - key: METHOD
+            value: POST
+            descriptors:
+              - key: header_match
+                value: x-client-id
+                descriptors:
+                - key: x-client-id
+                  rate_limit:
+                    unit: second
+                    requests_per_unit: 10

@@ -1,0 +1,104 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: filter-lua-actions
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:     
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.lua
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+            inline_code: |
+              function envoy_on_request(request_handle)
+                local payload = nil
+                if request_handle:streamInfo() ~= nil and request_handle:streamInfo():dynamicMetadata() ~= nil and request_handle:streamInfo():dynamicMetadata():get("envoy.filters.http.jwt_authn") ~= nil and request_handle:streamInfo():dynamicMetadata():get("envoy.filters.http.jwt_authn")["my_payload"] ~= nil then
+                    payload = request_handle:streamInfo():dynamicMetadata():get("envoy.filters.http.jwt_authn")["my_payload"]
+                    if payload["{your-payload-key-here}"] ~= nil then
+                      request_handle:headers():add("X-client-id", payload["{your-payload-key-here}"])
+                    end
+                end
+              end
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        # Adds the Envoy Rate Limit Filter in HTTP filter chain.
+        value:
+          name: envoy.filters.http.ratelimit
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
+            # domain can be anything! Match it to the ratelimter service config
+            domain: echo-ratelimit
+            failure_mode_deny: false
+            timeout: 10s
+            rate_limit_service:
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: outbound|8081||ratelimit.istio-system.svc.cluster.local
+                  authority: ratelimit.istio-system.svc.cluster.local
+              transport_api_version: V3
+    - applyTo: VIRTUAL_HOST
+      match:
+        context: GATEWAY
+        routeConfiguration:
+          vhost:
+            name: ""
+            route:
+              action: ANY
+      patch:
+        operation: MERGE
+        # Applies the rate limit rules.
+        value:
+          rate_limits:
+            - actions: # any actions in here
+              - request_headers:
+                  header_name: ":path"
+                  descriptor_key: "PATH"
+              - request_headers:
+                  header_name: ":method"
+                  descriptor_key: "METHOD"                              
+              - header_value_match:
+                  descriptor_value: x-client-id
+                  headers:
+                  - name: ":path"
+                    prefix_match: "/xpto"
+              - request_headers:
+                  header_name: "X-Client-Id"
+                  descriptor_key: x-client-id
+            - actions: # any actions in here
+              - request_headers:
+                  header_name: ":path"
+                  descriptor_key: "PATH"
+              - request_headers:
+                  header_name: ":method"
+                  descriptor_key: "METHOD"                              
+              - header_value_match:
+                  descriptor_value: x-client-id
+                  headers:
+                  - name: ":path"
+                    prefix_match: "/v1/payout"
+              - request_headers:
+                  header_name: "X-x-client-id"
+                  descriptor_key: x-client-id
