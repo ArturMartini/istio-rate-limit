@@ -10,14 +10,6 @@ spec:
   http:
   - match:
     - uri:
-        prefix: /v1/payout
-    route:
-    - destination:
-        port:
-          number: 8080
-        host: echo-service
-  - match:
-    - uri:
         prefix: /xpto
     route:
     - destination:

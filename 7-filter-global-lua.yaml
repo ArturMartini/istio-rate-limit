@@ -98,7 +98,7 @@ spec:
                   descriptor_value: x-client-id
                   headers:
                   - name: ":path"
-                    prefix_match: "/v1/payout"
+                    prefix_match: "/xpto2"
               - request_headers:
-                  header_name: "X-x-client-id"
+                  header_name: "X-client-id"
                   descriptor_key: x-client-id
